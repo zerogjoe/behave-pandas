@@ -15,31 +15,46 @@ def _get_column_index(column_rows, nb_cols):
     pass
 
 
-def table_to_dataframe(table, column_levels=1, index_levels=0, collapse_empty_index_levels=True):
+def table_to_dataframe(
+    table,
+    column_levels=None,
+    index_levels=0,
+    collapse_empty_index_levels=True,
+    data_types=None
+):
     """
     Given a behave table, convert it to a pandas data frame using the following rules:
-    - valid dtypes must be specified in the table heading
+    - valid dtypes must be specified in the table heading or the data_types parameter
     - 0 or more rows can be used to label columns (a multi index will be created if column_levels > 1)
     - 0 or more columns can be used to label columns (a multi index will be created if index_levels > 1)
     - For tables with multi indexed columns, row index level names will be flattened to a string by default
     instead of a tuple if needed, unless `collapse_empty_index_levels` is set to False.
-
     :param table: behave.Table
     :param column_levels: int
     :param index_levels: int
     :param collapse_empty_index_levels: bool
+    :param data_types: dict
     :return: pd.DataFrame
     """
-    if (not isinstance(column_levels, int)) or not (0 <= column_levels <= len(table.rows)):
-        raise ValueError('Invalid number of column levels requested. '
-                         'Max valid number for this table: {}'.format(len(table.rows)))
+
+    if column_levels is not None:
+        if (not isinstance(column_levels, int)) or not (0 <= column_levels <= len(table.rows)):
+            raise ValueError('Invalid number of column levels requested. '
+                            'Max valid number for this table: {}'.format(len(table.rows)))
 
     if not isinstance(index_levels, int) or not (0 <= index_levels <= len(table.headings)):
         raise ValueError('Invalid number of column levels requested. '
                          'Max valid number for this table: {}'.format(len(table.headings)))
 
-    dtypes = _get_dtypes(table.headings)
-    columns = _get_column_index(table.rows[:column_levels], len(table.headings))
+    dtypes = _get_dtypes(table.headings, data_types)
+
+    if column_levels:
+        columns = _get_column_index(table.rows[:column_levels], len(table.headings))
+    else:
+        if data_types:
+            columns = table.headings
+        else:
+            columns = _get_column_index(table.rows[:1], len(table.headings))
 
     data = [_convert_row_to_correct_type(row, dtypes) for row in table.rows[column_levels:]]
 
@@ -69,14 +84,20 @@ def _flatten_index_names_if_needed(collapse_empty_index_levels, column_levels, i
     return index_cols
 
 
-def _get_dtypes(headings):
-    invalid_dtypes = [dtype for dtype in headings if dtype not in VALID_DTYPES]
+def _get_dtypes(headings, dtypes_dict=None):
+
+    if dtypes_dict:
+        dtypes_list = [dtypes_dict[column_name] for column_name in headings]
+    else:
+        dtypes_list = headings
+
+    invalid_dtypes = [dtype for dtype in dtypes_list if dtype not in VALID_DTYPES]
 
     if len(invalid_dtypes) > 0:
         raise TypeError('Invalid dtype(s) detected in the table headings: {}. '
                         'Valid values are:\n{} '.format(', '.join(invalid_dtypes), ', '.join(VALID_DTYPES)))
 
-    return [VALID_DTYPES[dtype_name] for dtype_name in headings]
+    return [VALID_DTYPES[dtype_name] for dtype_name in dtypes_list]
 
 
 def _convert_row_to_correct_type(row, dtypes):
