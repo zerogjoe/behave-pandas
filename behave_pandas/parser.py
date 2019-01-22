@@ -79,8 +79,15 @@ def table_to_dataframe(
     if len(bycol) == 0:
         bycol = [None for col in columns]
 
+    # temporary fix for pandas datetime issue
+    def fix_datetime_dtype(dtype):
+        if dtype is np.datetime64:
+            return "datetime64[ns]"
+        else:
+            return dtype
+
     series = [
-        pd.Series(col_data, dtype=dtype, name=col_name)
+        pd.Series(col_data, dtype=fix_datetime_dtype(dtype), name=col_name)
         for (col_name, col_data, dtype) in zip(columns, bycol, dtypes)
     ]
 
